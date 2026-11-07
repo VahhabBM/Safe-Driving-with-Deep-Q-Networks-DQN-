@@ -1,0 +1,30 @@
+metadrive-simulator==0.4.3
+# torch is intentionally NOT version-pinned here, and NOT installed via this
+# file for GPU setups -- `pip install torch` alone can silently give you a
+# CPU-only build depending on your platform/index configuration. Instead:
+#
+#   1) Install everything else first:
+#        pip install metadrive-simulator==0.4.3 numpy matplotlib imageio imageio-ffmpeg
+#
+#   2) Install torch separately with an explicit CUDA build, matching the
+#      CUDA version your GPU driver supports (check with `nvidia-smi`, see
+#      the "CUDA Version" in the top-right of its output). Example for
+#      CUDA 12.1 (works for most recent NVIDIA drivers):
+#        pip install torch --index-url https://download.pytorch.org/whl/cu121
+#      For CUDA 11.8:
+#        pip install torch --index-url https://download.pytorch.org/whl/cu118
+#      (See https://pytorch.org/get-started/locally/ to pick the right one.)
+#
+#   3) Verify the GPU build actually landed before training:
+#        python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+#      This must print `True` -- if it prints `False`, torch installed as
+#      CPU-only (wrong index URL, missing/outdated NVIDIA driver, or no GPU
+#      on this machine) and training will silently fall back to CPU.
+#
+# If you don't have an NVIDIA GPU (or just want CPU), the plain line below
+# is all you need and GPU-specific steps above can be skipped entirely:
+torch
+numpy
+matplotlib
+imageio
+imageio-ffmpeg

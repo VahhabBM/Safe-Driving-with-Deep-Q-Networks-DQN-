@@ -1,0 +1,27 @@
+{
+  "episode_reward": [
+    24.06228693850838,
+    -34.93126206364745,
+    -35.69905014858622
+  ],
+  "episode_length": [
+    371,
+    145,
+    133
+  ],
+  "crashed": [
+    false,
+    false,
+    false
+  ],
+  "out_of_road": [
+    true,
+    true,
+    true
+  ],
+  "arrived": [
+    false,
+    false,
+    false
+  ]
+}

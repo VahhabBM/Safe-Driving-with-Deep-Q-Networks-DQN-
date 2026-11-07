@@ -1,555 +1,310 @@
-# Safe Driving with Deep Q-Networks (DQN)
+# Safe Driving with DQN in MetaDrive
 
-**Teaching an Autonomous Vehicle to Drive Smarter, Safer, and More Reliably**
+Implementation for the "Safe Driving with Deep Q-Networks in MetaDrive"
+homework (Practical Neural Networks). All 8 tasks (environment setup
+through evaluation/visualization) are implemented and verified end to end.
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-DQN-ee4c2c)](https://pytorch.org/)
-[![MetaDrive](https://img.shields.io/badge/Simulator-MetaDrive-2d6a4f)](https://github.com/metadriverse/metadrive)
-[![Reinforcement Learning](https://img.shields.io/badge/AI-Reinforcement%20Learning-purple)](https://en.wikipedia.org/wiki/Reinforcement_learning)
-[![Episodes](https://img.shields.io/badge/Training-800%20Episodes-orange)](#training)
+## Project structure
 
-An autonomous driving agent trained using **Deep Q-Networks (DQN)** in the MetaDrive simulation environment. The project explores how an agent can learn driving behavior through interaction, reward feedback, and experience replay, with particular attention to road safety, collision avoidance, and successful navigation.
-
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Key Features](#key-features)
-- [System Architecture](#system-architecture)
-- [How It Works](#how-it-works)
-- [Reward Design](#reward-design)
-- [Training](#training)
-- [Evaluation](#evaluation)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Project Structure](#project-structure)
-- [Technical Challenges](#technical-challenges)
-- [Technologies](#technologies)
-- [Authors](#authors)
-- [References](#references)
-
----
-
-## Overview
-
-Autonomous driving is a challenging sequential decision-making problem. An agent must continuously observe its environment, choose appropriate actions, and learn from the consequences of those actions.
-
-In this project, a Deep Q-Network agent is developed and trained using **MetaDrive**, a configurable driving simulator built for autonomous driving research.
-
-The agent learns a driving policy by interacting with the environment and optimizing its expected cumulative reward. The implementation includes experience replay, a target network, epsilon-greedy exploration, and a configurable reward function designed to encourage safer driving behavior.
-
-The project also includes training and evaluation workflows for analyzing agent performance, tracking driving outcomes, and visualizing learned behavior.
-
-## Key Features
-
-- **Deep Q-Network (DQN):** Neural-network-based action-value estimation.
-- **Experience Replay:** Stores and samples past transitions to improve training stability.
-- **Target Network:** Uses a separate network for more stable Q-value targets.
-- **Epsilon-Greedy Exploration:** Balances exploration and exploitation during training.
-- **Discrete Driving Actions:** Uses a structured action space combining steering and longitudinal control.
-- **Safety-Aware Reward Design:** Penalizes collisions and leaving the road while rewarding successful arrivals.
-- **Reward Clipping:** Limits extreme reward values during learning.
-- **GPU Support:** Supports CUDA-enabled PyTorch installations.
-- **Evaluation Pipeline:** Measures driving performance and analyzes crashes and successful arrivals.
-- **Visualization:** Generates training curves and supports top-down video and interactive 3D rendering.
-
-## System Architecture
-
-The project is organized into separate components for environment configuration, state processing, neural-network definition, experience storage, agent logic, training, and evaluation.
-
-```mermaid
-flowchart TD
-    A[MetaDrive Environment] --> B[State Processing]
-    B --> C[DQN Agent]
-    C --> D[Q-Network]
-    D --> E[Action Selection]
-    E --> F[Driving Action]
-    F --> A
-
-    A --> G[Reward and Next State]
-    G --> H[Replay Buffer]
-    H --> I[Sample Mini-Batch]
-    I --> J[Train Online Network]
-    J --> K[Update Target Network]
-    K --> D
+```
+metadrive_dqn/
+├── README.md
+├── requirements.txt
+├── train.py                    # Task 6 + 7: training loop + full training run
+├── evaluate.py                 # Task 8: evaluation + visualization
+├── replay_buffer.py            # Task 4: ReplayBuffer
+├── dqn_agent.py                # Task 5: DQNAgent
+├── configs/
+│   ├── __init__.py
+│   └── env_config.py           # Task 1: MetaDriveEnv factory + sanity check
+├── utils/
+│   ├── __init__.py
+│   └── processing.py           # Task 2: flatten_obs, discrete_to_continuous_action
+├── models/
+│   ├── __init__.py
+│   ├── dqn_network.py          # Task 3: DQNNetwork (state -> hidden -> hidden -> 6 Q-values)
+│   ├── dqn_trained.pt          # Final trained model weights (Task 7 output)
+│   ├── training_history.json   # Full per-episode training history (Task 7 output)
+│   └── training_curves.png     # Reward / episode length / crash-rate plots (Task 7/8 output)
+└── tests/
+    ├── __init__.py
+    ├── test_tasks_1_2_3.py     # Integration test for Task 1-3
+    ├── test_tasks_4_5.py       # Integration test for Task 4-5
+    └── test_tasks_6_7.py       # Integration test for Task 6-7
 ```
 
-## How It Works
-
-### 1. Environment Configuration
-
-The driving environment is configured through MetaDrive. The configuration defines the simulation behavior and the reward-related settings used during training and evaluation.
-
-Main configuration file:
-
-`configs/env_config.py`
-
-### 2. State Processing
-
-The environment observations are processed before being passed to the neural network.
-
-Main implementation:
-
-`utils/processing.py`
-
-### 3. DQN Network
-
-The neural network estimates the Q-value of each available action based on the current state.
-
-The network uses two fully connected hidden layers with 256 neurons each, followed by an output layer corresponding to the available actions.
-
-```text
-Input State
-    |
-Fully Connected Layer (256)
-    |
-Activation
-    |
-Fully Connected Layer (256)
-    |
-Activation
-    |
-Output Layer (10 Q-values)
-```
-
-Implementation:
-
-`models/dqn_network.py`
-
-### 4. Action Space
-
-The agent operates with a discrete action space containing 10 possible actions.
-
-The actions combine five steering levels with two longitudinal control choices:
-
-| Steering | Longitudinal Control |
-|---|---|
-| Hard Left | Brake / Forward |
-| Slight Left | Brake / Forward |
-| Straight | Brake / Forward |
-| Slight Right | Brake / Forward |
-| Hard Right | Brake / Forward |
-
-This discretization allows the DQN agent to learn driving decisions using a finite set of actions.
-
-### 5. Experience Replay
-
-The replay buffer stores previously observed transitions:
-
-- Current state
-- Selected action
-- Reward
-- Next state
-- Terminal status
-
-During training, random mini-batches are sampled from the buffer to reduce correlations between consecutive experiences.
-
-Implementation:
-
-`replay_buffer.py`
-
-### 6. DQN Agent
-
-The agent is responsible for action selection, experience collection, and network optimization.
-
-Its implementation includes:
-
-- Epsilon-greedy action selection
-- Q-value estimation
-- Experience replay
-- Target-network synchronization
-- Gradient-based optimization
-
-Implementation:
-
-`dqn_agent.py`
-
-### 7. Q-Learning Update
-
-The DQN agent learns by minimizing the difference between its predicted Q-values and the target Q-values.
-
-The target is calculated using:
-
-\[
-y = r + \gamma (1-d)\max_{a'}Q_{\text{target}}(s',a')
-\]
-
-Where:
-
-- \(r\): Immediate reward
-- \(\gamma\): Discount factor
-- \(d\): Terminal-state indicator
-- \(s'\): Next state
-- \(Q_{\text{target}}\): Target network
-
-The optimization process updates the online network while the target network is periodically synchronized.
-
----
-
-## Reward Design
-
-Reward engineering is an important part of autonomous driving because the agent must learn to make progress without compromising safety.
-
-The project includes a configurable reward system that considers driving outcomes and safety-related events.
-
-The safety-aware configuration includes:
-
-| Reward Component | Configuration |
-|---|---:|
-| Lateral reward | Enabled |
-| Out-of-road penalty | 50 |
-| Vehicle collision penalty | 50 |
-| Object collision penalty | 50 |
-| Speed reward | 0 |
-| Successful arrival reward | 50 |
-| Reward clipping | [-10, 50] |
-| Episode horizon | 2000 |
-
-The reward function is designed to:
-
-- Penalize leaving the drivable road.
-- Discourage collisions with vehicles and objects.
-- Reward reaching the destination.
-- Avoid relying on speed reward as a direct optimization objective.
-- Keep reward values within a controlled range.
-
-The training script also provides a legacy reward option for reproducing the earlier reward configuration.
-
----
-
-## Training
-
-The agent is trained by repeatedly interacting with the MetaDrive environment.
-
-During each episode, the agent observes the current state, selects an action, receives a reward, and stores the resulting transition in its replay buffer.
-
-The training process uses:
-
-| Parameter | Value |
-|---|---:|
-| Hidden layer size | 256 |
-| Discount factor (γ) | 0.99 |
-| Learning rate | 0.001 |
-| Epsilon decay | 0.995 |
-| Target update frequency | 1000 |
-| Action space size | 10 |
-
-The agent supports automatic device selection and explicit CPU/GPU configuration.
-
-### Reference Training Run
-
-One recorded training run produced the following results:
-
-| Metric | Result |
-|---|---:|
-| Training episodes | 800 |
-| Total training time | 27.9 minutes |
-| Average time per episode | 2.09 seconds |
-| Mean reward (last 10 episodes) | 91.13 |
-| Mean episode length (last 10 episodes) | 83.7 |
-
-**Important:** These figures belong to an earlier reward configuration and should not be interpreted as evaluation results for the final safety-aware configuration.
-
-The project also tracks reward trends, episode lengths, and driving outcomes to help analyze how the learned policy changes throughout training.
-
-### Training Curves
-
-![Training Curves](models/training_curves.png)
-
----
-
-## Evaluation
-
-The evaluation workflow provides tools for analyzing the trained agent independently of the training process.
-
-Available evaluation features include:
-
-- Greedy policy evaluation.
-- Average episode reward.
-- Average episode length.
-- Crash-rate measurement.
-- Successful-arrival rate.
-- Training-curve visualization.
-- Top-down driving video generation.
-- Interactive 3D simulation rendering.
-
-Evaluation can be performed over multiple episodes to obtain a broader picture of the agent's behavior.
-
-The evaluation script is implemented in:
-
-`evaluate.py`
-
----
-
-## Installation
-
-### Prerequisites
-
-- Python 3.10 or newer
-- pip
-- An NVIDIA GPU and a compatible driver for CUDA acceleration (optional)
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/VahhabBM/safe-driving-dqn.git
-cd safe-driving-dqn
-```
-
-### 2. Create a Virtual Environment
+## Setup
 
 ```bash
 python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-Activate it:
+> MetaDrive needs a working OpenGL / Panda3D setup. If you only need
+> headless training (no rendering), `use_render=False` (the default in
+> `configs/env_config.py`) avoids most graphics-driver issues.
 
-**Windows:**
+## Training on GPU
+
+`DQNAgent` already auto-selects a GPU whenever one is visible to torch
+(`device = "cuda" if torch.cuda.is_available() else "cpu"`) -- there's
+nothing to turn on in the code itself. What actually determines whether
+you train on GPU or CPU is which torch build is installed:
+
+1. Install torch with an explicit CUDA wheel -- see the commented
+   instructions at the top of `requirements.txt` (a plain
+   `pip install torch` can silently give you a CPU-only build).
+2. Verify it before training:
+   ```bash
+   python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+   ```
+   This must print `True`.
+3. `train.py`, `evaluate.py`, `inspect_dead_relu.py`, and
+   `inspect_policy.py` all now print a `CUDA available: ...` line on
+   startup, and `train.py`/`evaluate.py`/`inspect_*.py` accept a
+   `--device {cuda,cpu}` flag if you want to force one explicitly instead
+   of relying on auto-detect (`--device cuda` will raise a clear error
+   instead of silently training on CPU if no GPU is actually visible):
+   ```bash
+   python -m train --episodes 800 --device cuda
+   python -m evaluate --eval-episodes 20 --device cuda
+   ```
+
+Note on expected speedup: MetaDrive's environment stepping (physics +
+scenario generation) runs on CPU regardless -- the GPU only accelerates
+the network forward/backward passes in `agent.learn()`. With the default
+small state vector and a 2-hidden-layer, `hidden_size=256` network, the
+env-stepping CPU cost dominates wall-clock time, so GPU vs CPU training
+speed may be closer than you'd expect for this particular assignment size.
+GPU helps more if you increase `--hidden-size` substantially or raise
+`batch_size` in `dqn_agent.py`.
+
+### Windows install issue: "Long Path" error
+
+Installing `metadrive-simulator` on Windows can fail with:
+
+```
+ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory: '...events.out.tfevents...'
+HINT: This error might have occurred since this system does not have Windows Long Path support enabled.
+```
+
+This happens because some files bundled inside the MetaDrive package have
+paths longer than Windows' default 260-character limit. Fix it by opening
+PowerShell **as Administrator** and running:
+
+```powershell
+New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+  -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+```
+
+Then **fully restart** the machine (not just the terminal). If a
+half-installed `metadrive` folder is left over from a previous failed
+attempt, remove it manually before retrying:
+
+```powershell
+Remove-Item -Recurse -Force ".\.venv\Lib\site-packages\metadrive" -ErrorAction SilentlyContinue
+pip install metadrive-simulator==0.4.3
+```
+
+### Windows runtime issue: torch DLL load failure
+
+If running `train.py` or `evaluate.py` raises:
+
+```
+OSError: [WinError 1114] A dynamic link library (DLL) initialization routine failed.
+Error loading "...torch\lib\c10.dll" or one of its dependencies.
+```
+
+this is a known conflict between panda3d's native DLLs (used by MetaDrive)
+and torch's native DLLs on Windows. The fix already applied in this code:
+`torch` (via `dqn_agent`) is imported **before** `metadrive` (via
+`configs.env_config`) in both `train.py` and `evaluate.py`. If it still
+happens on your machine, also try:
+
+- Making sure conda's `base` environment is not active at the same time
+  as your venv (`conda deactivate` first).
+- `set KMP_DUPLICATE_LIB_OK=TRUE` before running the script.
+- Repairing/reinstalling the Visual C++ Redistributable, then rebooting.
+
+## How each task is implemented
+
+### Task 1 — `configs/env_config.py`
+- `create_metadrive_env(config_overrides=None, render=False)` builds a
+  `MetaDriveEnv` with a reproducible config: fixed `start_seed`,
+  `num_scenarios` (number of maps), `horizon` (max episode length),
+  `traffic_density`, and explicit crash/termination flags
+  (`crash_vehicle_done`, `crash_object_done`, `out_of_route_done`).
+  `use_render` toggles between headless training and 3D visualization.
+  Also includes safety-shaped reward settings by default
+  (`use_lateral_reward=True`, `out_of_road_penalty` / `crash_vehicle_penalty`
+  / `crash_object_penalty` = 20.0 instead of MetaDrive's own default of
+  5.0) -- see `--legacy-reward` in `train.py` to disable this for comparison.
+- `sanity_check_env(env, n_steps=20)` resets the env and takes random
+  steps, asserting the observation/reward/info all look sane.
+
+### Task 2 — `utils/processing.py`
+- `flatten_obs(obs)` converts the raw MetaDrive observation (numpy array,
+  or dict if extra sensors are enabled) into a flat `float32` vector.
+- `discrete_to_continuous_action(action_idx)` maps action indices `0-9` to
+  a `[steering, throttle_brake]` continuous action in `[-1, 1]²`.
+  **Updated from the original 6-action table** (Left/Straight/Right ×
+  Brake/Forward, steering only at full-lock -1.0/0.0/+1.0): diagnosed via
+  `inspect_policy.py` that even a correctly-trained, non-collapsed network
+  still ran off-road most of the time, because ordinary curves need a
+  moderate steering angle that simply didn't exist as an option -- full
+  lock oversteers, straight understeers off the outside of the curve.
+  Added a "slight" steering level (±`SLIGHT_STEER`, default 0.4) on each
+  side: 5 steering positions (hard-left/slight-left/straight/slight-right/
+  hard-right) × 2 throttle/brake = 10 actions. **Breaking change**: any
+  checkpoint trained under the old 6-action table is incompatible and
+  must be retrained.
+
+### Task 3 — `models/dqn_network.py`
+- `DQNNetwork(state_size, action_size, hidden_size=256)`: two hidden
+  `Linear + ReLU` layers, `state_size -> hidden -> hidden -> action_size`,
+  outputting one raw Q-value per action (no output activation).
+
+### Task 4 — `replay_buffer.py`
+- `ReplayBuffer(capacity, seed=None)` backed by a `collections.deque`
+  (auto-discards oldest transitions once full).
+- `push(state, action, reward, next_state, done)` stores one transition.
+- `sample(batch_size, device="cpu")` returns `(states, actions, rewards,
+  next_states, dones)` as correctly-shaped PyTorch tensors.
+
+### Task 5 — `dqn_agent.py`
+- `DQNAgent(state_size, action_size, ...)` owns an online `DQNNetwork`, a
+  target `DQNNetwork` (synced periodically, never trained directly), an
+  `Adam` optimizer, and a `ReplayBuffer`.
+- `select_action(state, greedy=False)`: epsilon-greedy action selection.
+  `greedy=True` always takes the argmax (used at evaluation time).
+- `decay_epsilon()`: multiplies epsilon by `epsilon_decay`, floored at
+  `epsilon_end`. Called once per episode.
+- `learn()`: samples a mini-batch, computes the Bellman target
+  `y = r + (1 - d) * gamma * max_a' Q_target(s', a')` using the **target**
+  network, computes `Q(s,a)` from the **online** network, backprops the
+  MSE loss, and every `target_update_freq` calls hard-copies the online
+  weights into the target network.
+- `save(path)` / `load(path)`: persist/restore the online network's
+  weights (`models/dqn_trained.pt`).
+
+### Task 6 — `train.py` → `train_dqn(...)`
+Per episode: reset env, epsilon-greedy action → continuous action →
+`env.step()` → store transition → learn once `min_buffer_size` transitions
+are collected. Episode ends on `terminated` or `truncated`. Records, per
+episode: total reward, episode length, whether a crash occurred (from
+`info["crash_vehicle"]` / `info["crash_object"]`), average loss, and
+epsilon.
+
+### Task 7 — `train.py` → `main()`
+CLI-driven training run. Builds the env + agent, runs `train_dqn`, then
+saves the trained model, the full training history (JSON), and the
+training-curve plot.
 
 ```bash
-.venv\Scripts\activate
+python -m train --smoke-test          # quick 10-episode sanity run
+python -m train --episodes 800        # full training run
 ```
 
-**Linux / macOS:**
+### Task 8 — `evaluate.py`
+- `evaluate_policy(...)`: runs the trained agent fully greedy (epsilon=0)
+  for N episodes and reports average reward, average episode length, and
+  crash rate.
+- `analyze_training_curves(history)`: re-plots the training curves and
+  numerically compares the first vs. last 10% of training episodes
+  (reward / length / crash rate trend).
+- `record_topdown_video(...)`: records a top-down view video of one greedy
+  episode (headless, no on-screen window required).
+- `run_3d_visualization(...)`: opens MetaDrive's interactive 3D window and
+  drives with the trained agent, taking periodic screenshots.
 
 ```bash
-source .venv/bin/activate
+python -m evaluate --eval-episodes 20                                     # numeric evaluation only
+python -m evaluate --eval-episodes 0 --plot-only                          # training-curve analysis only
+python -m evaluate --eval-episodes 0 --topdown-video --video-steps 500    # top-down video only
+python -m evaluate --eval-episodes 0 --show-3d                            # live 3D view only
+python -m evaluate --eval-episodes 20 --plot-only --topdown-video --show-3d   # everything at once
 ```
 
-### 3. Install Non-PyTorch Dependencies
+> `imageio` and `imageio-ffmpeg` (already in `requirements.txt`) are
+> required for `--topdown-video`.
 
-The project uses MetaDrive Simulator 0.4.3 and the following supporting libraries.
+## Running the sanity tests
 
-Install them first:
+From the `metadrive_dqn/` directory:
 
 ```bash
-pip install metadrive-simulator==0.4.3 numpy matplotlib imageio imageio-ffmpeg
+python -m tests.test_tasks_1_2_3
+python -m tests.test_tasks_4_5
+python -m tests.test_tasks_6_7
 ```
 
-### 4. Install PyTorch Separately
+Each prints `ALL CHECKS PASSED for Task N, M.` on success.
 
-**PyTorch is intentionally not version-pinned in `requirements.txt` and should be installed separately.**
+## Training run summary (reference results)
 
-A generic `pip install torch` command may install a CPU-only build depending on your platform and package index configuration.
-
-Choose the installation command that matches your hardware and CUDA requirements.
-
-**For CUDA 12.1:**
-
-```bash
-pip install torch --index-url https://download.pytorch.org/whl/cu121
+```
+Training finished in 27.9 min (2.09 s/episode)
+Saved trained model -> models/dqn_trained.pt
+Saved training history -> models/training_history.json
+Saved training curves -> models/training_curves.png
+Summary:
+  mean reward (last 10 eps): 91.13
+  mean length (last 10 eps): 83.7
+  crash rate  (last 10 eps): 0.30
 ```
 
-**For CUDA 11.8:**
-
-```bash
-pip install torch --index-url https://download.pytorch.org/whl/cu118
-```
-
-For other configurations, consult the official PyTorch installation selector:
-
-https://pytorch.org/get-started/locally/
-
-### 5. Verify PyTorch Installation
-
-Before starting GPU training, verify that PyTorch can access CUDA:
-
-```bash
-python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
-```
-
-For a CUDA-enabled setup, the output should report:
-
-```text
-True
-```
-
-If it reports `False`, PyTorch may have been installed as a CPU-only build, the NVIDIA driver may be missing or outdated, or CUDA may not be available on the machine.
-
-### CPU-Only Installation
-
-If you do not have an NVIDIA GPU or prefer CPU execution, install PyTorch using the standard command:
-
-```bash
-pip install torch
-```
-
-You can skip the CUDA-specific installation and verification steps.
-
-**Note:** GPU acceleration applies to PyTorch model computations. MetaDrive's simulation physics and scenario generation may remain CPU-bound, so overall training speed does not necessarily scale with GPU performance.
-
----
-
-## Usage
-
-### Training
-
-Run a quick smoke test:
-
-```bash
-python -m train --smoke-test
-```
-
-Train the agent for 800 episodes:
-
-```bash
-python -m train --episodes 800
-```
-
-To explicitly select the execution device:
-
-```bash
-python -m train --episodes 800 --device cuda
-```
-
-Or use CPU:
-
-```bash
-python -m train --episodes 800 --device cpu
-```
-
-To reproduce the earlier reward configuration:
-
-```bash
-python -m train --episodes 800 --legacy-reward
-```
-
-### Evaluation
-
-Evaluate the trained agent over 20 episodes:
-
-```bash
-python -m evaluate --eval-episodes 20
-```
-
-### Visualization
-
-Generate training plots:
-
-```bash
-python -m evaluate --plot-only
-```
-
-Generate a top-down driving video:
-
-```bash
-python -m evaluate --topdown-video
-```
-
-Launch interactive 3D visualization:
-
-```bash
-python -m evaluate --show-3d
-```
-
-Run evaluation with visualization options together:
-
-```bash
-python -m evaluate --eval-episodes 20 --topdown-video --show-3d
-```
-
-For the complete list of supported arguments, use:
-
-```bash
-python -m train --help
-python -m evaluate --help
-```
-
----
-
-## Project Structure
-
-```text
-safe-driving-dqn/
-│
-├── README.md
-├── requirements.txt
-│
-├── train.py
-├── evaluate.py
-├── replay_buffer.py
-├── dqn_agent.py
-│
-├── configs/
-│   ├── __init__.py
-│   └── env_config.py
-│
-├── utils/
-│   ├── __init__.py
-│   └── processing.py
-│
-├── models/
-│   ├── __init__.py
-│   ├── dqn_network.py
-│   ├── dqn_trained.pt
-│   ├── training_history.json
-│   └── training_curves.png
-│
-└── tests/
-    ├── __init__.py
-    ├── test_tasks_1_2_3.py
-    ├── test_tasks_4_5.py
-    └── test_tasks_6_7.py
-```
-
----
-
-## Technical Challenges
-
-Developing a reinforcement-learning agent for autonomous driving involves several practical challenges.
-
-### Action-Space Design
-
-Continuous driving controls must be represented using a discrete action space suitable for standard DQN.
-
-### Reward Engineering
-
-The reward function must balance successful navigation with safety-related behavior. Poorly designed rewards can encourage undesirable driving strategies.
-
-### Training Stability
-
-Experience replay, target-network synchronization, and controlled exploration help address instability during Q-learning.
-
-### Safety and Performance Analysis
-
-A high cumulative reward alone does not guarantee safe driving. Crash rates, successful arrivals, and episode lengths provide additional information about the learned policy.
-
-### Hardware and Environment Setup
-
-MetaDrive, PyTorch, CUDA, and GPU drivers must be configured consistently. In particular, installing the wrong PyTorch build can silently prevent GPU acceleration.
-
----
-
-## Technologies
-
-| Technology | Purpose |
-|---|---|
-| Python | Core implementation |
-| PyTorch | Deep learning and DQN |
-| MetaDrive Simulator 0.4.3 | Autonomous driving environment |
-| NumPy | Numerical operations |
-| Matplotlib | Training visualization |
-| ImageIO | Video and image processing |
-| ImageIO-FFmpeg | Video encoding support |
-
----
-
-## Authors
-
-**Vahhab Balandomanesh**
-
-**Mohammadmahdi Kazemi**
-
----
-
-## References
-
-- [MetaDrive Simulator](https://github.com/metadriverse/metadrive)
-- [PyTorch Documentation](https://pytorch.org/docs/stable/index.html)
-- [Playing Atari with Deep Reinforcement Learning](https://arxiv.org/abs/1312.5602)
-- [Deep Q-Learning](https://en.wikipedia.org/wiki/Q-learning)
-
----
-
-*Learning to drive is not just about moving forward. It is about knowing how to get there safely.*
+Over the full 800-episode run, reward improved substantially (early vs.
+late 10% of episodes: ~17 → ~87), while episode length dropped sharply
+(~744 → ~84 steps) and crash rate rose (0% → ~38%). This reflects
+MetaDrive's default reward function rewarding speed/progress more than it
+penalizes collisions — a classic speed-vs-safety tradeoff, not a bug in
+the implementation.
+
+> **Update: this reference run used the OLD, safety-blind reward.** The
+> rising-crash-rate pattern above is exactly why the safety-shaped reward
+> (`use_lateral_reward=True` + higher `*_penalty` values) is now the
+> **default** in `configs/env_config.py` (previously it was opt-in via a
+> `--reward-shaping` flag you had to remember to pass). If you're seeing
+> this same "reward goes up, crashes go up too" pattern, make sure you're
+> not passing `--legacy-reward` to `train.py` -- that flag intentionally
+> reproduces the old behavior above for comparison. Re-run without it (or
+> re-run and compare both) and check `crashRate` / `offRoadRate` in the
+> new `training_history.json` against this table. See the full report PDF
+> for the detailed discussion.
+
+## Notes / assumptions
+- Default MetaDrive observation is the built-in state-vector observation
+  (no camera), so `flatten_obs` mainly casts dtype/shape.
+- Crash info is read from MetaDrive's `info` dict (`crash_vehicle`,
+  `out_of_road`, etc.) — enabled by default, no extra config flag needed.
+- `hidden_size=256`, `gamma=0.99`, `lr=1e-3`, `epsilon_decay=0.995`,
+  `target_update_freq=1000` are the defaults used for the reference run;
+  feel free to tune further.
+- **Reward**: `use_lateral_reward=True`, `out_of_road_penalty` /
+  `crash_vehicle_penalty` / `crash_object_penalty` = 50.0 (MetaDrive's own
+  default is 5.0), `speed_reward=0.0` (default 0.1), and
+  `success_reward=50.0` (default ~10.0) are baked into `DEFAULT_CONFIG` as
+  of this version -- not opt-in anymore. Pass `--legacy-reward` to
+  `train.py` only if you deliberately want to reproduce the old
+  crash-prone, arrival-blind behavior for an ablation comparison.
+- **Reward clipping is ASYMMETRIC**: `dqn_agent.py`'s `reward_clip_min`
+  (default -10.0) / `reward_clip_max` (default 50.0). This guards against
+  Q-value divergence (a real failure mode hit during development -- see
+  git history / conversation notes if you have them) while still letting
+  the large one-time `success_reward` register as clearly bigger than
+  routine per-step reward instead of being squashed to the same size as a
+  crash penalty.
+- **Horizon raised to 2000** (was 1000) -- evaluation was showing average
+  episode lengths of 660-820 steps out of a 1000-step horizon, meaning a
+  meaningful fraction of episodes may have been cut off by the horizon
+  before the car could reach the destination even when driving well.
+- **Arrival is now tracked explicitly.** `train.py`'s history and
+  `evaluate.py`'s results both include an `"arrived"` field
+  (`info["arrive_dest"]`), plotted as a third line on `training_curves.png`
+  and reported as `arrival rate` by `evaluate.py`. This matters because
+  "didn't crash and didn't leave the road" is NOT the same as "reached the
+  destination" -- an episode can survive to the horizon by, e.g., driving
+  in circles or getting stuck, and none of the older metrics would have
+  caught that. `evaluate.py` also reports a `timed-out-without-arriving
+  rate` for exactly that case.
